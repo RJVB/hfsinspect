@@ -33,7 +33,7 @@ CC_name := $(shell basename $(CC))
 
 # Linux needs some love.
 ifeq ($(OS), Linux)
-sys_CFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_ISOC11_SOURCE
+sys_CFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_ISOC11_SOURCE -D__USE_BSD
 LIBS += -lm $(shell pkg-config --libs libbsd-overlay uuid)
 endif
 
@@ -118,23 +118,23 @@ $(PRODUCTNAME): $(PCHFILE) $(BINARYPATH)
 $(BINARYPATH): $(OBJFILES)
 	@echo Building hfsinspect
 	@mkdir -p `dirname $(BINARYPATH)`
-	@$(CC) -o $(BINARYPATH) $^ $(ALL_CFLAGS) $(ALL_LDFLAGS) $(LIBS)
+	$(CC) -o $(BINARYPATH) $^ $(ALL_CFLAGS) $(ALL_LDFLAGS) $(LIBS)
 	@echo "=> $(BINARYPATH)"
 
 $(OBJDIR)/%.o: %.c $(PCHFILE)
 	@echo Compiling $<
 	@mkdir -p `dirname $@`
-	@$(CC) -o $@ -c $< $(cc_CFLAGS) $(ALL_CFLAGS)
+	$(CC) -o $@ -c $< $(cc_CFLAGS) $(ALL_CFLAGS)
 
 $(OBJDIR)/%.h.pch: %.h
 	@echo Precompiling $<
 	@mkdir -p `dirname $@`
-	@$(CC) -o $@ -x c-header $< $(ALL_CFLAGS)
+	$(CC) -o $@ -x c-header $< $(ALL_CFLAGS)
 
 $(OBJDIR)/%.d: %.c
 	@echo Generating dependancies $<
 	@mkdir -p `dirname $@`
-	@$(CC) -M -c $< -MF $@
+	$(CC) -M -c $< -MF $@
 
 everything: all docs
 
@@ -142,22 +142,22 @@ clean: clean-hfsinspect
 
 distclean: clean-hfsinspect clean-test clean-docs
 	@echo "Removing all build artifacts."
-	@$(RM) -r build
+	$(RM) -r build
 
 pretty:
 	find $(SOURCEDIR) -iname '*.[hc]' -and \! -path '*Apple*' | uncrustify -c uncrustify.cfg -F- --replace --no-backup --mtime -lC
 
 docs:
 	@echo "Building documentation."
-	@doxygen docs/doxygen.config >/dev/null 2>&1
+	doxygen docs/doxygen.config >/dev/null 2>&1
 
 install: $(BINARYPATH)
 	@echo "Installing hfsinspect in $(PREFIX)"
 	@mkdir -p $(PREFIX)/bin
-	@$(INSTALL) $(BINARYPATH) $(PREFIX)/bin
+	$(INSTALL) $(BINARYPATH) $(PREFIX)/bin
 	@echo "Installing manpage in $(PREFIX)"
 	@mkdir -p $(PREFIX)/share/man/man1
-	@$(INSTALL) hfsinspect.1 $(PREFIX)/share/man/man1
+	$(INSTALL) hfsinspect.1 $(PREFIX)/share/man/man1
 
 uninstall:
 	$(RM) $(PREFIX)/bin/$(PRODUCTNAME)
@@ -169,15 +169,15 @@ test: all
 
 clean-test:
 	@echo "Cleaning test images."
-	@$(RM) "images/test.img" "images/MBR.dmg"
+	$(RM) "images/test.img" "images/MBR.dmg"
 
 clean-hfsinspect:
 	@echo "Cleaning hfsinspect."
-	@$(RM) -r $(BUILDDIR)
+	$(RM) -r $(BUILDDIR)
 
 clean-docs:
 	@echo "Cleaning documentation."
-	@$(RM) -r docs/html docs/doxygen.log
+	$(RM) -r docs/html docs/doxygen.log
 
 dist.tgz: $(ALLFILES)
 	tar -czf dist.tgz $^

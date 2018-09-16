@@ -14,6 +14,9 @@
 #if defined(BSD)
     #include <sys/mount.h>     //statfs
 #endif
+#ifdef __linux__
+    #include <ctype.h>
+#endif
 
 #include "logging/logging.h"   // console printing routines
 #include "volumes/volumes.h"
@@ -69,13 +72,13 @@ char* deviceAtPath(char* path)
 
 bool resolveDeviceAndPath(char* path_in, char* device_out, char* path_out)
 {
-#if defined(__BSD__)
     char* path = realpath(path_in, NULL);
     if (path == NULL) {
         die(1, path_in);
         return false;
     }
 
+#if defined(__BSD__) || defined(__APPLE__)
     struct statfs stats;
     int           result = statfs(path_in, &stats);
     if (result < 0) {
@@ -110,6 +113,60 @@ bool resolveDeviceAndPath(char* path_in, char* device_out, char* path_out)
     debug("Path out: %s", path_out);
 
     return true;
+#elif defined(__linux__)
+    bool ret = false;
+    char *command = NULL;
+    int comlen = asprintf(&command, "df -h \"%s\" | tail --lines=1", path_in);
+    FILE *fp = comlen > 0 ? popen(command, "r") : NULL;
+    if (fp) {
+        char buf[PATH_MAX * 3], *s = buf;
+        if (fgets(buf, sizeof(buf), fp) == buf) {
+            char *d = device_out;
+            s = buf;
+            while (*s && !isspace(*s)) {
+                *d++ = *s++;
+            }
+            if (isspace(*s)) {
+                *d = '\0';
+            } else {
+                warning("%s: failure reading mount device from \"%s\"", __FUNCTION__, buf);
+                device_out[0] = '\0';
+            }
+            s = strstr(buf, "% /");
+            if (s) {
+                char* mountPoint = &s[2];
+                size_t len = strlen(mountPoint);
+                if (len > 0 && mountPoint[len-1] == '\n') {
+                    mountPoint[len-1] = '\0';
+                    len -= 1;
+                }
+                if (strncmp(mountPoint, "/", PATH_MAX) != 0) {
+                    // Remove mount point from path name (rather blindly, yes)
+                    d = &path[len];
+                    (void)strlcpy(path_out, &path[len], PATH_MAX);
+                } else {
+                    (void)strlcpy(path_out, path, PATH_MAX);
+                }
+                free(path);
+                ret = true;
+            } else {
+                warning("%s: failure reading mountPoint from \"%s\"", __FUNCTION__, buf);
+                path_out[0] = '\0';
+            }
+        } else {
+            perror(command);
+        }
+        pclose(fp);
+        debug("Path in: %s", path_in);
+        debug("Device out: %s", device_out);
+        debug("Path out: %s", path_out);
+    } else {
+        perror(command ? command : path_in);
+    }
+    if (comlen) {
+        free(command);
+    }
+    return ret;
 #else
     warning("%s: not supported on this platform", __FUNCTION__);
     return false;
